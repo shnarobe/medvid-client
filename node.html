@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="./assets/robust-websocket.js"></script>
+    <script src="JSMpeg.js"></script>
+  </head>
+  <body onload="loadVideo()">
+    <button onclick="start()">START</button>
+    <button onclick="closeConnection()">Close</button>
+    <button onclick="sendMsg()">send message</button>
+    <button onclick="startRecording()">Rec</button>
+    <button onclick="stopRecording()">Stop Rec</button>
+    <textarea id="msg"></textarea>
+    <input id="in" type="text" />
+    <span>LOCAL STREAM</span>
+    <video
+      id="localVideo"
+      autoplay
+      style="width: -webkit-fill-available"
+    ></video>
+    <button onclick="getConnectedDevices();">Get connected devices</button>
+    <canvas id="canvas1" style="display: none"></canvas>
+    <span>REMOTE STREAM</span>
+    <video id="remoteView" autoplay></video>
+
+    <video id="recordView" autoplay></video>
+    <video id="recVideo" autoplay></video>
+    <script>
+      player = new JSMpeg.Player("ws://10.20.148.87:9998", {
+        canvas: document.getElementById("canvas1"), // Canvas should be a canvas DOM element
+        pauseWhenHidden: false,
+      }); //ip:10.20.148.87
+    </script>
+    <script src="mediaStreamGenerator.js"></script>
+    <script>
+      websocket = null;
+      var peerConnection = null;
+      var localStream = canvasStream;
+      console.log("local stream built", localStream);
+      let videoFileName = "";
+      localStream.getTracks().forEach((track) => {
+        //add the video track
+
+        console.log("Track found in localStream: ", track);
+      });
+      var dataArr = [];
+      recorder = null;
+      count = 0;
+      var examConfig = [];
+      var examConfigID = "";
+      const my_type = "node";
+      client_name = funct();
+      //this.id=nom;
+      //use a while loop with a settimeout to attempt to reconnect every 2 seconds
+      websocket = new RobustWebSocket("ws://10.20.142.211:9090", "wss", {
+        timeout: 4000,
+        shouldReconnect: function (event, websocket) {
+          return Math.pow(1.5, websocket.attempts) * 500;
+        },
+        automaticOpen: true,
+      }); //server ip:10.20.142.211
+      websocket.onopen = (event) => {
+        console.log("Client logs in. ip is", window.location.host);
+        //send json encoded data with an identifier of the server
+        websocket.send(JSON.stringify({ type: "login", name: client_name }));
+        //this could be a boolean flag or a function call
+      };
+      //this.websocket.onmessage = onMessageHandler;
+
+      function sendMsg(msg) {
+        // va = document.getElementById("in").value;
+        /*socket.send(data)
+Transmits data using the WebSocket connection. data can be a string, a Blob,
+ an ArrayBuffer, or an ArrayBufferView.*/
+        websocket.send(msg);
+      }
+
+      function closeConnection() {
+        websocket.close();
+      }
+
+      //websocket.close();
+
+      var recordedChunks = [];
+
+      //get html video element
+      const remoteView = document.querySelector("video#remoteView");
+      const localVideo = document.querySelector("video#localVideo");
+      // Get local stream, show it in self-view, and add it to be sent.
+      //const stream = navigator.mediaDevices.getUserMedia(constraints).then();
+      //attach stream to video element
+      //videoElement.srcObject = stream;
+      /* const configuration = {
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      };*/
+
+      //var websocket = new signallingClient();
+      //websocket.onmessage=onMessageHandler;
+      const constraints = { video: true, audio: true };
+      //setUpConnection();
+      //async function s() {
+      //console.log("s called");
+      websocket.onmessage = async (eve) => {
+        desc = JSON.parse(eve.data);
+        console.log("message received:", desc);
+        try {
+          if (desc) {
+            if (desc.type === "ping") {
+              console.log("Ping received. Sending Pong.");
+              websocket.send(
+                JSON.stringify({
+                  type: "pong",
+                  name: "Server",
+                  client: client_name,
+                })
+              );
+            }
+            // If you get an offer, you need to reply with an answer.
+            //and add your tracks to the peerconnection object to be picked up on other end
+            //also create your answer
+            else if (desc.type === "offer") {
+              console.log("offer matched");
+              await peerConnection.setRemoteDescription(desc.offer);
+
+              stream = localStream;
+              //const stream = await navigator.mediaDevices.getUserMedia(
+              //constraints
+              //);
+              stream
+                .getTracks()
+                .forEach((track) => peerConnection.addTrack(track, stream));
+              await peerConnection.setLocalDescription(
+                await peerConnection.createAnswer()
+              );
+              console.log(
+                "offer received and answer generated",
+                peerConnection
+              );
+              //note that offer creation->answer creation
+              websocket.send(
+                JSON.stringify({
+                  type: "answer",
+                  name: "Server",
+                  answer: peerConnection.localDescription,
+                })
+              );
+            } else if (desc.type === "answer") {
+              console.log("answer matched");
+              await peerConnection.setRemoteDescription(desc.answer);
+            } else if (desc.type === "iceCandidate") {
+              await peerConnection.addIceCandidate(desc.candidate);
+              console.log("added ice candidates received", peerConnection);
+            } else if (desc.type === "login") {
+              console.log("I as the Client has logged in");
+            } /*else if (desc.type === "startR") {
+              videoFileName = desc.fileName;
+              console.log("video name", desc.fileName);
+              startRecording(desc.fileName);
+            }*/ else if (desc.type === "stopR") {
+              stopRecording(); //.then(alert("recording saved!"));
+            } else if (desc.type === "configuration") {
+              //upon configuration receipt, save->extract config_dentifier->send Ack with identifier
+              examConfig = desc.data;
+              examConfigID = desc.data[5].ID;
+              console.log(
+                "in Exam mode",
+                desc.data,
+                "examConfigID:",
+                examConfigID
+              );
+              let ack = JSON.stringify({
+                type: "examConfigACK",
+                id: examConfigID,
+                name: "Server",
+                client: client_name,
+              });
+              sendMsg(ack);
+              console.log("sent ACK to Server", ack);
+            } else if (desc.type === "startRecording") {
+              executeExamCommands(examConfig, "startRecording");
+              //send ACK of recording started
+            } else if (desc.type === "reset") {
+              executeExamCommands(examConfig, "reset");
+            } else if (desc.type === "startSessionRecording") {
+              //set the file name for the video
+              videoFileName = desc.fileName;
+              //make a call to start ffmpeg process to record stream
+              let stateId = desc.systemStateIdentifier;
+              console.log("video name", desc.fileName);
+              startffmpegRecording(desc.fileName, desc.ip, stateId);
+              //send ACK of recording started
+            } else if (desc.type === "stopSessionRecording") {
+              //set the file name for the video
+              // videoFileName=desc.fileName;
+              //make a call to start ffmpeg process to record stream
+              console.log("stop session recording", desc.ip);
+              stopffmpegRecording(desc.ip);
+              //send ACK of recording started
+            } else {
+              console.log("Unsupported SDP type.");
+            }
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      // }
+      /*The MediaStreamTrack object represents media of a single type that originates from one 
+      media source in the User Agent, e.g. video produced by a web camera. A MediaStream is used to group 
+      several MediaStreamTrack objects into one unit that can be recorded or rendered in a media element.
+
+Each MediaStream can contain zero or more MediaStreamTrack objects. */
+      async function start() {
+        try {
+          console.log("Media stream tracks", localStream);
+          //allow server to intiate connection to client rather than vice versa, which is sort of antipattern
+          /*localStream.getTracks().forEach((track) => {
+            peerConnection.addTrack(track, localStream);
+            console.log("tracks", track);
+          });*/
+          document.querySelector("video#localVideo").srcObject = localStream;
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      function startRecording(fn = "") {
+        dataArr = [];
+        if (recorder === null) {
+          //add checks for if stream is available
+          //create recorder object
+          try {
+            //s = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log("streams", localStream);
+            var options;
+            if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) {
+              options = { mimeType: "video/webm; codecs=vp9" };
+            } else if (MediaRecorder.isTypeSupported("video/webm;codecs=vp8")) {
+              options = { mimeType: "video/webm; codecs=vp8" };
+            }
+
+            recorder = new MediaRecorder(localStream, {
+              mimeType: "video/webm",
+            });
+            console.log("recorder created: ", recorder);
+            //create new element and add stream to it to check if stream is useabe
+            //vid = document.createElement("video");
+            //vid.srcObject = localStream;
+            //document.body.appendChild(vid);
+          } catch (error) {
+            console.log("Recording error: ", error);
+          }
+          console.log("media recorder", recorder);
+
+          recorder.ondataavailable = (event) => {
+            console.log(" Recorded chunk of size " + event.data.size + "B");
+            if (event.data.size > 0) {
+              dataArr.push(event.data);
+              console.log("data pushed in array", dataArr);
+            }
+          };
+          recorder.start(100);
+          //send ACK after recording starts
+          let recordingack = JSON.stringify({
+            type: "recordingACK",
+            id: examConfigID,
+            name: "Server",
+            client: client_name,
+          });
+          sendMsg(recordingack);
+          console.log("sent RECORDING ACK to Server", recordingack);
+
+          recorder.onstop = (eve) => {
+            console.log("stopped", eve);
+          };
+        } else {
+          //restsrt recorder
+          console.log("state of recorder before restart", recorder);
+          recorder.start(100);
+          console.log("state of recorder after restart", recorder);
+        }
+      }
+
+      function stopRecording() {
+        //return promise after video is downloaded
+        // return new Promise((resolve, reject) => {
+        if (recorder.state === "recording") {
+          recorder.stop();
+          downloadVideo();
+        }
+
+        // resolve("True");
+        //});
+      }
+
+      function transferRecording() {
+        stopRecording();
+        //transfer data to server
+      }
+      //create a link and add the blob as the href and then simulate a click on that link
+      function downloadVideo() {
+        blob = new Blob(dataArr);
+        //empty data array
+
+        /*createObjectURL\(\)\ \ \  function, which generates a transient URL, 
+        serving the purpose of showcasing or obtaining the file.
+
+*/
+        url = window.URL.createObjectURL(blob);
+        a = document.createElement("a");
+        a.style = "display:none";
+        a.href = url;
+        a.download = videoFileName + ".mov";
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        count++;
+        //send to server. data channel can't accommodate large file sizes so use web socket
+        try {
+          //dataChannel.send(blob);
+
+          websocket.send({
+            type: "saveVideo",
+            name: "Server",
+            data: blob,
+            fileName: videoFileName,
+          });
+          console.log("sending blob");
+        } catch (err) {
+          console.log("error sending blob", err);
+        }
+      }
+      async function saveToDisk() {
+        try {
+          //return reference to FileSystemDirectoryHandle Object for access to the root of OPFS
+          fileSystemRoot = await navigator.storage.getDirectory();
+          //get a file handle from the root directory to save file
+          //use getDirectoryHandle() to get a subfolder /folder in te roor dir
+          directoryHandle = await fileSystemRoot.getDirectoryHandle(
+            "Bline Recordings",
+            { create: true }
+          );
+          fileHandle = await directoryHandle.getFileHandle("Recorded.mp4", {
+            create: true,
+          });
+          //create a special writeable stream on the file handle;
+          //The method returns a Promise which resolves to this created stream.
+          writeableStream = await fileHandle.createWritable();
+          await writeableStream.write(dataArr);
+          await writeableStream.close();
+
+          //OR
+          //use the synchronous (separate thread) method
+          synchronousFileHandle = await fileHandle.createSyncAccessHandle();
+          synchronousFileHandle.write(dataArr);
+          synchronousFileHandle.flush();
+          synchronousFileHandle.close();
+        } catch (err) {
+          console.log("error saving file: ", err);
+        }
+      }
+      function play() {
+        var superBuffer = new Blob(dataArr);
+        videoElement = document.getElementById("recordView");
+        videoElement.src = window.URL.createObjectURL(superBuffer);
+      }
+      function getStream(constraints) {
+        const stream_ = localStream;
+      }
+
+      function executeExamCommands(config, command) {
+        /*1. access config array for examProperty field that matches the command given. */
+
+        for (i = 0; i < config.length; i++) {
+          //2.if both the node type and exam property/command matches then and only then execute
+          //e.g studentLogin should only match student Pc and run
+          if (
+            config[i].examProperty === command &&
+            config[i].type === my_type
+          ) {
+            //display doornote
+            if (command === "startRecording") {
+              //hide the form
+              startRecording();
+              console.log("command executed start recording", config);
+            } else if (command === "reset") {
+              stopRecording();
+              console.log("command executed stop recording", config);
+            }
+          }
+        }
+      }
+
+      function loadVideo() {
+        document.querySelector("video#localVideo").srcObject = canvasStream;
+      }
+
+      async function startffmpegRecording(fn, ipAddr, stateId) {
+        //create a websocketconnection to rtspServer
+        //make fetch api call to start recording
+        let result = await fetch("/api/recording/start", {
+          method: "POST",
+          body: JSON.stringify({
+            fileName: fn,
+            ip: ipAddr,
+            SystemState: stateId,
+          }),
+          headers: { "Content-Type": "application/json" },
+        });
+        let msg = await result.json();
+        console.log(msg);
+      }
+
+      async function stopffmpegRecording(ipAddr) {
+        //make fetch call to close websocketconnection to rtspServer
+        //make fetch api call to stop recording
+        let result = await fetch("/api/recording/stop", {
+          method: "GET",
+        });
+        let msg = await result.json();
+        console.log("message: ", msg.message, "location", msg.location);
+        //if success then send recording to server, using the filname passed in.
+        if (msg.message == "success") {
+          websocket.send(
+            JSON.stringify({ type: "VideoUploadedACK", data: msg.location })
+          );
+        }
+        console.log(msg);
+      }
+    </script>
+  </body>
+</html>

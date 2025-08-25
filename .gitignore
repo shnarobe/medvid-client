@@ -1,0 +1,7 @@
+ffmpeg/
+cert/
+recordings/
+assets/
+node_modules/
+.vscode/
+.env*

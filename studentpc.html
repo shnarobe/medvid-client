@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- Latest compiled and minified CSS -->
+	
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"
+    />
+
+   
+	<!-- jQuery library -->
+    <script src="/assets/jquery-3.7.1.js"></script>
+    <!-- Popper JS -->
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+
+    <!-- Latest compiled JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+	 
+  </head>
+  <body>
+    <div id="masterConatiner" class="container-fluid">
+      <div id="examDisplay">
+        <div
+          class="col-sm-6"
+          id="form_holder"
+          style="position: absolute; top: 20%; left: 25%; text-align: center"
+        >
+          <form id="login_form">
+            <div class="mb-3 mt-3">
+              <label for="username" class="form-label">Username:</label>
+              <input
+                type="text"
+                class="form-control"
+                id="username"
+                placeholder="Enter Username"
+                name="username"
+              />
+            </div>
+            <div class="mb-3">
+              <label for="pwd" class="form-label">Password:</label>
+              <input
+                type="password"
+                class="form-control"
+                id="pwd"
+                placeholder="Enter password"
+                name="pwd"
+              />
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+          </form>
+        </div>
+        <div
+          id="waitingHolder"
+          style="
+            position: absolute;
+            top: 20%;
+            left: 25%;
+            text-align: center;
+            display: none;
+          "
+        ></div>
+        <div id="doorNoteHolder"></div>
+      </div>
+    </div>
+
+    <script>
+      websocket = null;
+      var localStream = null;
+      var dataArr = [];
+      recorder = null;
+      count = 0;
+      var examConfig = [];
+      var examConfigID = "";
+      const my_type = "studentPC";
+      //construct client name
+      const funct = () => {
+        let ip_and_port = window.location.host;
+        end_index = ip_and_port.indexOf(":");
+        ip_address = ip_and_port.substring(0, end_index);
+        nom = ip_address + "_" + "57" + "_" + my_type;
+        console.log("constructed name: ", nom);
+        return nom;
+      };
+      client_name = funct();
+      //this.id=nom;
+      //use a while loop with a settimeout to attempt to reconnect every 2 seconds
+      websocket = new WebSocket("ws:\\10.20.142.211:9090");
+      websocket.onopen = (event) => {
+        console.log("Client logs in. ip is", window.location.host);
+        //send json encoded data with an identifier of the server
+        websocket.send(JSON.stringify({ type: "login", name: client_name }));
+        //this could be a boolean flag or a function call
+      };
+      //this.websocket.onmessage = onMessageHandler;
+
+      function sendMsg(msg) {
+        // va = document.getElementById("in").value;
+        /*socket.send(data)
+      Transmits data using the WebSocket connection. data can be a string, a Blob,
+       an ArrayBuffer, or an ArrayBufferView.*/
+        websocket.send(msg);
+      }
+
+      function closeConnection() {
+        websocket.close();
+      }
+
+      //websocket.close();
+
+      //async function s() {
+      //console.log("s called");
+      websocket.onmessage = async (eve) => {
+        desc = JSON.parse(eve.data);
+        console.log("message received:", desc);
+        try {
+          if (desc) {
+            // If you get an offer, you need to reply with an answer.
+            //and add your tracks to the peerconnection object to be picked up on other end
+            //also create your answer
+            if (desc.type === "offer") {
+              console.log("offer matched");
+            } else if (desc.type === "answer") {
+              console.log("answer matched");
+            } else if (desc.type === "iceCandidate") {
+            } else if (desc.type === "login") {
+              console.log("I as the Client has logged in");
+            } else if (desc.type === "configuration") {
+              //upon configuration receipt, save->extract config_dentifier->send Ack with identifier
+              examConfig = desc.data;
+              examConfigID = desc.data[5].ID;
+              console.log(
+                "in Exam mode",
+                desc.data,
+                "examConfigID:",
+                examConfigID
+              );
+              let ack = JSON.stringify({
+                type: "examConfigACK",
+                id: examConfigID,
+                name: "Server",
+                client: client_name,
+              });
+              sendMsg(ack);
+              console.log("sent ACK to Server", ack);
+            } else if (desc.type === "studentLogin") {
+              executeExamCommands(examConfig, "studentLogin");
+            } else if (desc.type === "doorNote") {
+              executeExamCommands(examConfig, "doorNote");
+            } else {
+              console.log("Unsupported SDP type.", desc);
+            }
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      // }
+      /*The MediaStreamTrack object represents media of a single type that originates from one
+            media source in the User Agent, e.g. video produced by a web camera. A MediaStream is used to group
+            several MediaStreamTrack objects into one unit that can be recorded or rendered in a media element.*/
+
+      function executeExamCommands(config, command) {
+        /*1. access config array for examProperty field that matches the command given. */
+
+        for (i = 0; i < config.length; i++) {
+          //2.if both the node type and exam property/command matches then and only then execute
+          //e.g studentLogin should only match student Pc and run
+          if (
+            config[i].examProperty === command &&
+            config[i].type === my_type
+          ) {
+            //display doornote
+            if (command === "doorNote") {
+              //send ACK when doornote is displayed
+              let doornoteack = JSON.stringify({
+                type: "doornoteACK",
+                id: examConfigID,
+                name: "Server",
+                client: client_name,
+              });
+              sendMsg(doornoteack);
+              console.log("sent doornote displayed ACK to Server", doornoteack);
+
+              //hide the form
+              document.querySelector("div#form_holder").style.display = "none";
+              //hide the waiting notice
+              document.querySelector("div#waitingHolder").style.display =
+                "none";
+              document.querySelector("div#doorNoteHolder").innerHTML =
+                config[i].content;
+              document.querySelector("div#doorNoteHolder").style.display =
+                "block";
+              console.log("doornote displayed", config);
+            } else if (command === "studentLogin") {
+              document.querySelector("div#doorNoteHolder").innerHTML = "";
+              document.querySelector("div#doorNoteHolder").style.display =
+                "none";
+              document.querySelector("div#form_holder").style.display = "block";
+
+              console.log("Login form displayed", config);
+            }
+          }
+        }
+      }
+
+      document.querySelector("form#login_form").onsubmit = (event) => {
+        event.preventDefault();
+        form = document.querySelector("form#login_form");
+
+        form_data = new FormData(form);
+
+        json_data = {
+          username: form_data.get("username"),
+          password: form_data.get("pwd"),
+        };
+        //postJSON(json_data);
+
+        //sendMsg(JSON.stringify({ type: "ldapLogin", data: [json_data] }));
+        //upon successful login:hide login form, display wait message,send message to server and await
+        //next instruction
+        //form.style.display = "none";
+      };
+
+      async function postJSON(data) {
+        try {
+          // const response = await fetch("http://localhost:8085/ldap", {
+          fetch("http://localhost:8085/ldap", {
+            method: "POST", // or 'PUT'
+            // mode: "no-cors",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(json_data),
+          }).then((res) => {
+            console.log(res);
+          });
+
+          // response.json().then(data=>{console.log(data);});//await response.json();
+          const result = "empty data";
+          console.log("Success:", result);
+          //upon successful login:hide login form, display wait message,send message to server and await
+          //next instruction
+          // document.querySelector("form#login_form").style.display = "none";
+        } catch (error) {
+          console.error("Error:", error);
+        }
+      }
+    </script>
+    <script type="text/javascript">
+      $(document).ready(function () {
+        document.querySelector("form#login_form").onsubmit = (event) => {
+          event.preventDefault();
+		//console.log("ajax called");
+          form = document.querySelector("form#login_form");
+
+          form_data = new FormData(form);
+
+          json_data = {
+            username: form_data.get("username"),
+            password: form_data.get("pwd"),
+          };
+          dat = JSON.stringify(json_data);
+          $.ajax({
+            url: "http://10.20.142.144:8085/ldap",
+            dataType: "json",
+            data: dat,
+            type: "POST",
+            success: function (data) {
+			console.log("data returned", data);
+              var ret = data;//jQuery.parseJSON(data);
+              $("#lblResponse").html(ret.logged_in);
+              console.log("Success: ", data, ret.logged_in);
+              if (ret.logged_in === "true") {
+                //if user is logged in then send ACK, hide login form and show waiting
+                let loginack = JSON.stringify({
+                  type: "studentLoginACK",
+                  name: "Server",
+                  client: client_name,
+                });
+                sendMsg(loginack);
+                console.log("sent student Logged in ACK to Server", loginack);
+                document.querySelector("div#form_holder").style.display =
+                  "none";
+                document.querySelector(
+                  "div#waitingHolder"
+                ).innerHTML = `<h2>Please remain Focused on this Screen.</h2>`;
+                document.querySelector("div#waitingHolder").style.display =
+                  "block";
+              }
+            },
+            error: function (xhr, status, error) {
+              console.log("Error: " + error.message);
+              $("#lblResponse").html("Error connecting to the server.");
+            },
+          });
+        };
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+Name=Room57
+RoomNumber=57
+Type=node
+IP=10.20.148.87
+SERVER_IP=10.20.142.211:8080
+Camera1=rtsp://root:sgubline@10.20.138.198/axis-media/media.amp
+Camera2=rtsp://root:sgubline@10.20.138.199/axis-media/media.amp
+Audio=rtsp://root:sgubline@10.20.138.200/axis-media/media.amp
+BrowserPath=C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe

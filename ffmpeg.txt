@@ -1,0 +1,43 @@
+Input #0, rtsp, from 'rtsp://root:sgubline@10.20.138.198/axis-media/media.amp':
+  Metadata:
+    title           : Session streamed with GStreamer
+    comment         : rtsp-server
+  Duration: N/A, start: 0.033333, bitrate: N/A
+  Stream #0:0: Video: h264 (Baseline), yuvj420p(pc, bt709, progressive), 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 90k tbn
+Input #1, rtsp, from 'rtsp://root:sgubline@10.20.138.199/axis-media/media.amp':
+  Metadata:
+    title           : Session streamed with GStreamer
+    comment         : rtsp-server
+  Duration: N/A, start: 0.033322, bitrate: N/A
+  Stream #1:0: Video: h264 (Baseline), yuvj420p(pc, bt709, progressive), 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 90k tbn
+Input #2, rtsp, from 'rtsp://root:sgubline@10.20.138.200/axis-media/media.amp':
+  Metadata:
+    title           : Media Presentation
+  Duration: N/A, start: 0.101031, bitrate: N/A
+  Stream #2:0: Audio: aac (LC), 32000 Hz, mono, fltp
+Adjusted ts offset for Input #0 by 11 us to sync with Input #1.
+Stream mapping:
+  Stream #0:0 (h264) -> hstack (graph 0)
+  Stream #1:0 (h264) -> hstack (graph 0)
+  Stream #2:0 -> #0:0 (aac (native) -> mp2 (native))
+  hstack:default (graph 0) -> Stream #0:1 (mpeg1video)
+Press [q] to stop, [?] for help
+[swscaler @ 00000231214e5280] deprecated pixel format used, make sure you did set range correctly
+Output #0, mpegts, to 'pipe:':
+  Metadata:
+    title           : Session streamed with GStreamer
+    comment         : rtsp-server
+    encoder         : Lavf60.16.100
+  Stream #0:0: Audio: mp2, 32000 Hz, mono, s16, 384 kb/s
+    Metadata:
+      encoder         : Lavc60.31.102 mp2
+  Stream #0:1: Video: mpeg1video, yuv420p(tv, progressive), 2560x720 [SAR 1:1 DAR 32:9], q=2-31, 2500 kb/s, 30 fps, 90k tbn
+    Metadata:
+      encoder         : Lavc60.31.102 mpeg1video
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/2500000 buffer size: 0 vbv_delay: N/A
+[rtsp @ 000002311e952140] max delay reached. need to consume packet=3059.2kbits/s dup=0 drop=6853 speed=0.998x
+[rtsp @ 000002311e952140] RTP: missed 1 packets
+[rtsp @ 000002311f0f88c0] max delay reached. need to consume packet
+[rtsp @ 000002311f0f88c0] RTP: missed 1 packets
+cam1: New WebSocket Connection (2 total)kB time=00:06:01.66 bitrate=3051.6kbits/s dup=0 drop=10861 speed=0.998x
