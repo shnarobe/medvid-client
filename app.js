@@ -9,14 +9,13 @@ const ws=require("ws");
 const child_process=require("child_process");
 const MongoClient = require("mongodb").MongoClient;
 //const coursesRoute = require("./routes/courses");
-const recording = require("./routes/recording");
+
 const path = require("path");
 const mongoose = require("mongoose");
 require("dotenv").config();
 //npm install --save socket.io-client
 const socketio_client = require("socket.io-client");
-const state = require("./state");
-const recordingModule = require("./recordingModule");
+
 const roomDetails=require("./routes/roomDetails");
 const consumeMessages = require("./messageQueueConsumer");
 const examStepRoute=require("./routes/examSteps");
@@ -59,8 +58,7 @@ app.set("views", "views");
 //load static files from the assets directory, Video App such as websocketClient.html etc
 app.use(express.static('assets'));
 
-//use the recording route for starting and stopping recordings.
-app.use("/api/recording", recording);
+
 
 //use the roomDetails api for returning all config data related to a room
 app.use("/api/roomdetails",roomDetails);
@@ -96,6 +94,25 @@ let dbs;
 //const client = new MongoClient(MURL);
 
 
+
+// Global error handlers
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Log to file or monitoring service here
+  // Perform cleanup if needed
+  process.exit(1); // Exit with failure code
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Log to file or monitoring service here
+});
+
+// Add error handler for Node.js warnings
+process.on('warning', (warning) => {
+  console.warn('Node.js warning:', warning.name, warning.message);
+  // Log to file or monitoring service here
+});
 
 mongoose
   .connect(MURL)
@@ -206,10 +223,33 @@ mongoose
         //When a client gets disconnected, any call to socket.emit() is buffered until reconnection:
         //that is, socket.emit() on the client.
         const socketname = "ws://" + app.locals.serverip;
-         socket = socketio_client(socketname, {
+        socket = socketio_client(socketname, {
           auth: {
             serverOffset: 0,
           },
+          reconnection: true,
+          reconnectionAttempts: 10,
+          reconnectionDelay: 1000,
+        });
+
+        // Socket error handling
+        socket.on('error', (error) => {
+          console.error('Socket.IO Error:', error);
+          // Log to file or monitoring service here
+          systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, 
+            {socketStatus: 'error', error: error.message});
+        });
+
+        socket.on('reconnect_failed', () => {
+          console.error('Socket.IO: Failed to reconnect after all attempts');
+          systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, 
+            {socketStatus: 'reconnect_failed'});
+        });
+
+        socket.on('reconnect_attempt', (attemptNumber) => {
+          console.log(`Socket.IO: Reconnection attempt ${attemptNumber}`);
+          systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, 
+            {socketStatus: 'reconnecting', attemptNumber});
         });
 
         socket.on("connect", () => {
@@ -825,8 +865,9 @@ mongoose
         //the launched page will then make a socketio connection to the server
         socket.on("EXAM_MODE", async (obj, callback) => {
           console.log("received exam mode request", obj);
-          //check if browser is already running
-          if (puppeteerBrowser && puppeteerBrowser.connected) {
+          try {
+            //check if browser is already running
+            if (puppeteerBrowser && puppeteerBrowser.connected) {
             console.log("Browser is already running");
             callback({ message: "success", clientname: obj.clientname });
             return;
@@ -841,7 +882,11 @@ mongoose
               return;
             }
           } 
-          
+        }
+        catch (error) {
+          console.error('Error in EXAM_MODE:', error);
+          callback({ message: "failure", clientname: obj.clientname });
+        }
           /**const puppeteer = require('puppeteer');
           
 
@@ -1643,6 +1688,27 @@ function stopRtspServer() {
     }, 5000);
   }
 }
+
+
+function checkSystemHealth() {
+  const health = {
+    socketConnected: socket && socket.connected,
+    browserRunning: puppeteerBrowser && puppeteerBrowser.connected,
+    dbConnected: mongoose.connection.readyState === 1,
+    memory: process.memoryUsage(),
+    uptime: process.uptime()
+  };
+  
+  systemState.updateState('health', health);
+  
+  // Alert on issues
+  if (!health.socketConnected || !health.dbConnected) {
+    console.error('System health check failed:', health);
+  }
+}
+
+// Run health check periodically
+setInterval(checkSystemHealth, 60000); // every minute
  
         
 

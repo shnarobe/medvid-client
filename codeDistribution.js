@@ -8,9 +8,9 @@ function createInstaller() {
   console.log('Creating application installer...');
   
   // 1. Bundle the application
-  console.log('Bundling application...');
+ /*  console.log('Bundling application...');
   execSync('npm run build', { stdio: 'inherit' });
-  
+   */
   // 2. Copy necessary files to dist folder
   const distDir = path.join(__dirname, '../dist');
   if (!fs.existsSync(distDir)) {
@@ -21,27 +21,37 @@ function createInstaller() {
   const installBat = path.join(distDir, 'install.bat');
   fs.writeFileSync(installBat, `
 @echo off
-echo Installing Video Exam App...
+echo Installing SGUSimHub App...
 
 :: Set FFmpeg path
-set FFMPEG_PATH=c:\Program Files\sgusimhub\ffmpeg\bin
+set FFMPEG_PATH=c:\\Program Files\\sgusimhub\\ffmpeg\\bin
 setx PATH "%PATH%;%FFMPEG_PATH%" /M
 
 :: Create program directory
-mkdir "%ProgramFiles%\Video Exam App"
+mkdir "%ProgramFiles%\\sgusimhub"
+
+::%~dp0 provides the full path to the directory containing the batch script, including a trailing backslash.
+set source=%~dp0
 
 :: Copy files
-xcopy /E /I /Y ".\\*" "%ProgramFiles%\\sgusimhub"
+xcopy "%source%medvid-client" "%ProgramFiles%\\sgusimhub" /E /I /Y
 
-:: Install dependencies
+
 cd "%ProgramFiles%\\sgusimhub"
-npm install 
+call npm install
+if errorlevel 1 (
+  echo Error: Failed to install dependencies!
+  pause
+)
+
 
 :: Install as service
-node service-installer.js
-
-:: Also Install as RtspService
-node /streamMonitor/createRtspMonitoringService.js
+:: start cmd.exe /k "cd /d %ProgramFiles%\\sgusimhub && node service-installer.js"
+call node service-installer.js
+if errorlevel 1 (
+  echo Error: Failed to install service!
+  pause
+)
 
 :: Create shortcuts
 powershell "$s=(New-Object -COM WScript.Shell).CreateShortcut('%userprofile%\\Desktop\\sgusimhub.lnk');$s.TargetPath='%ProgramFiles%\\sgusimhub\\app.js';$s.Save()"
@@ -57,11 +67,10 @@ const { Service } = require('node-windows');
 const path = require('path');
 
 const svc = new Service({
-  name: 'Video Exam App',
-  description: 'Video examination application service',
+  name: 'SGUSimHub App',
+  description: 'SGUSimHub App',
   script: path.join(__dirname, 'app.js'),
   nodeOptions: ['--max_old_space_size=4096'],
-  env: [{ name: "NODE_ENV", value: "production" }],
   workingDirectory: __dirname
 });
 
