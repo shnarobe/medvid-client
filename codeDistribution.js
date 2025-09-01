@@ -39,6 +39,8 @@ xcopy "%source%medvid-client" "%ProgramFiles%\\sgusimhub" /E /I /Y
 
 cd "%ProgramFiles%\\sgusimhub"
 call npm install
+
+CALL installPuppeteer.bat
 if errorlevel 1 (
   echo Error: Failed to install dependencies!
   pause
@@ -60,6 +62,25 @@ echo Installation complete!
 pause
   `);//also set ffmpeg path in batch file
   
+
+
+
+
+ // 3. Create batch file for installation
+  const installPuppeteer = path.join(distDir, 'installPuppeteer.bat');
+  fs.writeFileSync(installPuppeteer, `
+@echo off
+echo Installing Puppeteer...
+
+
+cd "%ProgramFiles%\\sgusimhub"
+call npm install puppeteer
+
+
+  `);//also set ffmpeg path in batch file
+
+
+  
   // 4. Create service installer
   const serviceInstaller = path.join(distDir, 'service-installer.js');
   fs.writeFileSync(serviceInstaller, `
@@ -70,9 +91,14 @@ const svc = new Service({
   name: 'SGUSimHub App',
   description: 'SGUSimHub App',
   script: path.join(__dirname, 'app.js'),
-  nodeOptions: ['--max_old_space_size=4096'],
-  workingDirectory: __dirname
+  nodeOptions: [
+        '--harmony',
+        '--max_old_space_size=2048'
+    ],
 });
+
+svc.logOnAs.account = 'BlineAdmin';
+svc.logOnAs.password = 'Bline@admin7';
 
 svc.on('install', () => {
   console.log('Service installed');
@@ -80,6 +106,7 @@ svc.on('install', () => {
 });
 
 svc.install();
+
   `);
   
   console.log('Installer created successfully in dist folder');

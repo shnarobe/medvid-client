@@ -8,7 +8,8 @@ const mongodb = require("mongodb");
 const ws=require("ws");
 const child_process=require("child_process");
 const MongoClient = require("mongodb").MongoClient;
-//const coursesRoute = require("./routes/courses");
+const winston=require("winston");
+const logger = require("./logger");
 
 const path = require("path");
 const mongoose = require("mongoose");
@@ -21,6 +22,9 @@ const consumeMessages = require("./messageQueueConsumer");
 const examStepRoute=require("./routes/examSteps");
 const systemState=require("./systemstate");
 const bodyParser = require('body-parser');
+
+//const launchBrowser=require("./browserModule");
+
 var http_server = null;
 let child=null;
 var websocketAlt=null;
@@ -30,9 +34,9 @@ var socket;
 var recordingMap=new Map();
 var uploadingMap=new Map();
 var connectionClosed=false;
-const puppeteer=require("puppeteer");
+
 let rtspServerProcess = null;
-var puppeteerBrowser=null;
+var Browser=null;
 const wssServer=new ws.Server({port:9990});//set up the websocket server for student/patientpc
 const connections=new Map();//holds all connections to the websocket server
 app.use(bodyParser.json()) // for parsing application/json
@@ -100,7 +104,19 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
   // Log to file or monitoring service here
   // Perform cleanup if needed
-  process.exit(1); // Exit with failure code
+   // Log to file or monitoring service here
+         logger.error('uncaughtException', {error:error.toString()});
+
+          logger.logWithContext('error', 'Socket connection failed', app, {
+              sessionId: "",//currentSessionId,
+              error: error.toString(),
+              stack: error.toString(),
+              meta: {
+                filename: "",//recordingFilename,
+                duration: "",//recordingDuration
+             }
+            });
+  //process.exit(1); // Exit with failure code
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -108,11 +124,31 @@ process.on('unhandledRejection', (reason, promise) => {
   // Log to file or monitoring service here
 });
 
+/* 
+Implemented a custom transport for MongoDB
+
 // Add error handler for Node.js warnings
 process.on('warning', (warning) => {
   console.warn('Node.js warning:', warning.name, warning.message);
   // Log to file or monitoring service here
 });
+
+const logger = winston.createLogger({
+  levels: {
+    error: 0,    // Most severe
+    warn: 1,
+    info: 2,
+    debug: 3     // Least severe
+  },
+  format: winston.format.combine(
+    winston.format.timestamp(),// Add timestamp to logs
+    winston.format.json()// Format logs as JSON
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+}); */
 
 mongoose
   .connect(MURL)
@@ -212,10 +248,11 @@ mongoose
         systemState.init(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`,app.locals.camera1,app.locals.camera2);
         console.log(typeof app.locals.serverip, app.locals.serverip);
         console.log("state initialized", systemState.getState());
-        if(app.locals.type=="node"){
+        /* if(app.locals.type=="node"){
             //launch rtspServer
+            //no longer used as the RTSP server is now launched as a standalone service
           rtspServerProcess = launchRtspServer(app.locals.camera1,app.locals.camera2,app.locals.audio);
-        }
+        } */
         //mke a websocket connection to server websocket
         //implement the server offset field so that the client can keep track of the last message it processed
         //this id will simply be an argument to the socket on event and is updated as follows:
@@ -236,6 +273,17 @@ mongoose
         socket.on('error', (error) => {
           console.error('Socket.IO Error:', error);
           // Log to file or monitoring service here
+         logger.error('Socket.IO Error:', {error:error.toString()});
+
+          logger.logWithContext('error', 'Socket connection failed', app, {
+              sessionId: "",//currentSessionId,
+              error: error.toString(),
+              stack: error.toString(),
+              meta: {
+                filename: "",//recordingFilename,
+                duration: "",//recordingDuration
+             }
+      });
           systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, 
             {socketStatus: 'error', error: error.message});
         });
@@ -269,6 +317,20 @@ mongoose
             }).catch(err => {
               console.error("Failed to reconnect to MongoDB:", err);
               socket.emit("db_reconnect", { message:"failure",error: "Failed to reconnect to MongoDB" });
+
+              logger.error('MongoDB Error:', {error: err.toString()});
+
+              logger.logWithContext('error', 'MongoDB reconnection failed', app, {
+                sessionId: "",//currentSessionId,
+                error: err.toString(),
+                stack: err.toString(),
+                meta: {
+                  filename: "",//recordingFilename,
+                  duration: "",//recordingDuration
+                }
+              });
+
+
             });
           }
 
@@ -404,26 +466,57 @@ mongoose
                 //consume messages from the queue
                 //consumeMessages();
                 /**Before starting a recording make sure there isnt already a recording in progress */
-                if(recordingMap.has( obj.stepData.filename)){
+                if(recordingMap.has( obj.stepData.filename) && recordingMap.get(obj.stepData.filename).sessionId === sessionId){
+                  //if recording is in progress and same session id then simply 
+                  //return success else stop 
                   //if there is a recording in progress then return failure message and do not start a new recording
                   console.log("Recording already in progress for this ip address", obj.clientname);
-                  callback({messageId:obj.stepData.messageId,stepName:"start_session",message:"failure",description:"Recording already in progress",
+                  callback({messageId:obj.stepData.messageId,stepName:"start_session",message:"success",description:"Recording already in progress",
                     clientname:obj.clientname,code:1,filename:obj.stepData.filename,sessionId:sessionId});
+
+                    //log  
+                    logger.error('Recording Error:', {error:"Recording already in progress"});
+
+                    logger.logWithContext('error', 'Socket connection failed', app, {
+                        sessionId: sessionId,
+                        error: "Recording already in progress",
+                        stack: "Recording already in progress",
+                        meta: {
+                          filename: obj.stepData.filename,
+                          duration: "",
+                      }
+                      });
+                   //TO DO:possibly stop recording 
                   return;
                 }
-                if(recordingMap.size>0){//if the map is not empty then it means the current recording is differnt from the one in the map
-                  console.log("The recording name to stop is: ",obj.stepData.filename,"The filename being recorded is: ",recordingMap.values().next().value,ipaddr);
-                  const {messageId,filename,ip}=recordingMap.get(recordingMap.keys().next().value);
-                 
-                  if(filename!=obj.stepData.filename){
-                    //if the filename is not the same then return failure message and do not start a new recording
-                    console.log("Recording already in progress for this ip address", obj.clientname,'but the filename to stop is: ',obj.stepData.filename,"and the filename being recorded is: ",filename);
-                   
-                  }
-                  callback({messageId:obj.stepData.messageId,stepName:"start_session",message:"failure",description:"Possible corruption: filename to stop does not match filename being recorded",
-                    clientname:obj.clientname,code:5,filename:obj.stepData.filename,sessionId:sessionId});
-                  return;
-                }
+                 if(recordingMap.has( obj.stepData.filename) && recordingMap.get(obj.stepData.filename).sessionId != sessionId){
+                   //if there is a recording in progress with a different session id then stop it
+                   console.log("Stopping recording for this ip address", obj.clientname);
+                   const {messageId,filename,ip,sessId}=recordingMap.get(recordingMap.keys().next().value);
+                   await stopffmpegRecordingAlt(messageId,filename,ip);
+                   recordingMap.clear();
+                   callback({messageId:obj.stepData.messageId,stepName:"start_session",message:"failure",description:"Recording already in progress",
+                     clientname:obj.clientname,code:1,filename:obj.stepData.filename,sessionId:sessionId});
+
+                     //log  
+                    logger.error('Recording Error:', {error:"Mismatched sessionID. Stopping older recording"});
+
+                    logger.logWithContext('error', 'Socket connection failed', app, {
+                        sessionId: sessionId,
+                        error: "Mismatched sessionID. Stopping older recording",
+                        stack: "Mismatched sessionID. Stopping older recording",
+                        meta: {
+                          filename: filename,
+                          duration: "",
+                          sessionBeingRecorded: sessId,
+                          sessionAskedToStop: sessionId
+                      }
+                      });
+
+                     return;
+
+                 }
+               
 
                 const response = await startffmpegRecordingAlt(obj.stepData.filename,obj.stepData.messageId, ipaddr,sessionId);//await startffmpegRecording(obj.filename, ipaddr);
                 const result=JSON.parse(response);
@@ -866,22 +959,71 @@ mongoose
         socket.on("EXAM_MODE", async (obj, callback) => {
           console.log("received exam mode request", obj);
           try {
-            //check if browser is already running
-            if (puppeteerBrowser && puppeteerBrowser.connected) {
+			  const browserPath=path.join(__dirname,"assets","chrome","win64-139.0.7258.154","chrome-win64","chrome.exe");//"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe";//path.join(__dirname,"assets","Application","chrome.exe");
+
+          /*   //check if browser is already running
+            if (Browser ) {
             console.log("Browser is already running");
             callback({ message: "success", clientname: obj.clientname });
             return;
           } else {
-            puppeteerBrowser = await launchSecureBrowser();
-            if (puppeteerBrowser && puppeteerBrowser.connected) {
+			//assign child process to browser
+        await launchBrowser();
+		   
+            if (Browser) {
+				
               callback({ message: "success", clientname: obj.clientname });
+			  console.log("browser launched");
               return;
             } else {
               console.log("Failed to launch browser");
               callback({ message: "failure", clientname: obj.clientname });
               return;
             }
-          } 
+          }  */
+		  /////////////////////
+		   child = child_process.spawn(browserPath,[
+                  //"--kiosk",  //Enable kiosk mode (full-screen without UI)
+                  "--disable-infobars", // Disable "Chrome is being controlled by automated test software" message
+                  "--noerrdialogs", // Suppress error dialogs
+                  "--disable-session-crashed-bubble", // Disable session restore prompts
+                  "--disable-extensions", // Disable extensions
+                  "--disable-component-update", // Disable component updates
+                  "--disable-features=TranslateUI", // Disable translation UI 
+                  'http://localhost:8080/']);
+                child.on('error', (err) => {
+                  console.error(`Error occurred with child process: ${err}`);
+                  systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, {browser:"error"});
+                  //Failure case
+                  callback({ message: "failure", clientname: obj.clientname });
+				  //child=null;
+				  //Browser=child;
+                  //return child;
+                 });
+                child.on("spawn",()=>{  
+                  //success case
+                  console.log("child process spawned. Chrome successfully opened");
+                  systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, {browser:"connected"});
+				   // Browser=child;
+                  callback({ message: "success", clientname: obj.clientname });
+                  //return child;
+                });
+                child.stdout.on('data', (data) => {
+                  console.log(`Google stdout: ${data}`);
+              });
+              
+              child.stderr.on('data', (data) => {
+                  console.error(`Google stderr: ${data}`);
+              });
+              
+              child.on('close', (code) => {
+                  console.log(`child process exited with code ${code}`);
+                  //child=null;
+				  //Browser=child;
+                  systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, {browser:"disconnected"});
+              });
+		  
+		  //////////////////
         }
         catch (error) {
           console.error('Error in EXAM_MODE:', error);
@@ -960,9 +1102,9 @@ async function launchWithPlaywright() {
         socket.on('disconnect_exam_mode', (obj,callback) => {
           console.log("Exam mode disconnected");
           // Handle exam mode disconnection
-          if (puppeteerBrowser && puppeteerBrowser.connected) {
-            puppeteerBrowser.close();
-            puppeteerBrowser = null;
+          if (Browser) {
+            Browser.kill();
+            Browser = null;
             systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, {browser:"disconnected"});
             callback({ message: "success", clientname: obj.clientname });
           }
@@ -995,10 +1137,10 @@ async function launchWithPlaywright() {
           //if the socket is closed, then we need to close the ffmpeg process and the websocket connection
           try{
             if(recordingMap.size>0){
-              recordingMap.forEach((value,key)=>{
+              recordingMap.forEach(async (value,key)=>{
                 let lastFileName=value.filename;
                 let lastIp=value.ip;
-                stopffmpegRecordingAlt(lastFileName,lastIp);
+                await stopffmpegRecordingAlt(lastFileName,lastIp);
                 console.log("stopping recording for ip",lastIp,"filename",lastFileName);
               });
               recordingMap.clear();
@@ -1551,34 +1693,8 @@ function uploadAlt(fn,sessionID){
 }
 
 
-async function launchSecureBrowser() {
-  //check if browser is already running
-  /* if (browser) {
-    console.log("Browser is already running");
-    return browser;
-  } */
-  // Launch a new browser instance
-  const browser = await puppeteer.launch({
-    headless: false, // or true for headless
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-web-security',
-      '--disable-features=VizDisplayCompositor',
-      '--start-fullscreen', // for kiosk mode
-      '--kiosk',
-      '--disable-infobars',
-      '--disable-extensions'
-    ]
-  });
-  
-  const page = await browser.newPage();
-  await page.goto('http://localhost:8080/');
-  page.once('load', () => {
-    console.log('Page loaded successfully');
-  });
-  return browser;
-}
+
+
 /**options for packaging app
  * // Install node-windows
 npm install node-windows
@@ -1610,6 +1726,55 @@ svc.install();
 /**Launch rtspServer as a child process*/
   // At the top of app.js
 
+
+async function launchBrowser(){
+	//C:\Program Files (x86)\Google\Chrome\Application
+	
+	const browserPath=path.join(__dirname,"assets","chrome","win64-139.0.7258.154","chrome-win64","chrome.exe");//"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe";//path.join(__dirname,"assets","Application","chrome.exe");
+	console.log("browser path",browserPath);
+	
+	 child = child_process.spawn(browserPath,[
+                  //"--kiosk",  //Enable kiosk mode (full-screen without UI)
+                  "--disable-infobars", // Disable "Chrome is being controlled by automated test software" message
+                  "--noerrdialogs", // Suppress error dialogs
+                  "--disable-session-crashed-bubble", // Disable session restore prompts
+                  "--disable-extensions", // Disable extensions
+                  "--disable-component-update", // Disable component updates
+                  "--disable-features=TranslateUI", // Disable translation UI 
+                  'http://localhost:8080/']);
+                child.on('error', (err) => {
+                  console.error(`Error occurred with child process: ${err}`);
+                  systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, {browser:"error"});
+                  //Failure case
+                  //callback({ message: "failure", clientname: obj.clientname });
+				  child=null;
+				  Browser=child;
+                  //return child;
+                 });
+                child.on("spawn",()=>{  
+                  //success case
+                  console.log("child process spawned. Chrome successfully opened");
+                  systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, {browser:"connected"});
+				    Browser=child;
+                  //callback({ message: "success", clientname: obj.clientname });
+                  //return child;
+                });
+                child.stdout.on('data', (data) => {
+                  console.log(`Google stdout: ${data}`);
+              });
+              
+              child.stderr.on('data', (data) => {
+                  console.error(`Google stderr: ${data}`);
+              });
+              
+              child.on('close', (code) => {
+                  console.log(`child process exited with code ${code}`);
+                  child=null;
+				  Browser=child;
+                  systemState.updateState(`${app.locals.ip}_${app.locals.roomnumber}_${app.locals.type}`, {browser:"disconnected"});
+              });
+		//return child;
+}
 
 function launchRtspServer(cam1,cam2,audio) {
   if (rtspServerProcess && rtspServerProcess.exitCode === null) {
@@ -1693,7 +1858,7 @@ function stopRtspServer() {
 function checkSystemHealth() {
   const health = {
     socketConnected: socket && socket.connected,
-    browserRunning: puppeteerBrowser && puppeteerBrowser.connected,
+    browserRunning: Browser ,
     dbConnected: mongoose.connection.readyState === 1,
     memory: process.memoryUsage(),
     uptime: process.uptime()
