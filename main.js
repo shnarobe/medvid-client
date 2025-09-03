@@ -100,7 +100,8 @@ const logger = winston.createLogger({
  * perform all external browser tasks using IPC 
   */
 //1. Wait for the app to be ready before starting 
-let tray=null;
+var tray=null;
+var win=null;//the browser window
 app.whenReady().then(()=>{
   //create the tray icon
   tray=new Tray(path.join(__dirname,'logo.png'));
@@ -809,8 +810,10 @@ app.whenReady().then(()=>{
             socket.on("EXAM_MODE", async (obj, callback) => {
               console.log("received exam mode request", obj);
               try {
-                //launch the browser in kiosk mode
-                createWindow();
+                //launch the browser in kiosk mode but first check if the window is already created
+                if(!win){
+                  createWindow();
+                }
                 callback({ message: "success", clientname: obj.clientname });
                 systemState.updateState(`${app_object.locals.ip}_${app_object.locals.roomnumber}_${app_object.locals.type}`, {browser:"disconnected"});
 
@@ -1390,7 +1393,7 @@ function uploadAlt(fn,sessionID){
 
         const createWindow = () => {
           //launch browser in full screen, kiosk mode
-          const win = new BrowserWindow({
+          win = new BrowserWindow({
             width: 800,
             height: 600,
             //fullscreen: true,
@@ -1403,7 +1406,8 @@ function uploadAlt(fn,sessionID){
           });
           win.loadFile('index.html');
           win.webContents.openDevTools();//open dev tools
-          //set the webContents object so that we can pass data from main to the renderer
+          //set the webContents object so that we can pass data from main to the renderer with the 
+          //client and server details
           win.webContents.on('did-finish-load', (event) => {
             console.log("WebContents finished loading:", event);
           //channel, args
@@ -1413,20 +1417,55 @@ function uploadAlt(fn,sessionID){
             });
           });
         }
-
-        async function handleDataFromRendererProcess(rendererData){
-            console.log("Data received from renderer process:", rendererData);
+        /**This will be the main function to handle all communication flows from the renderer process.
+         * It will consist of a switch statement or if else logic to handle different commands.
+         */
+        async function handleDataFromRendererProcess(event,rendererData){
+            console.log("Event from renderer process",event," Data received from renderer process:", rendererData);
             // Return the data you want to send to the renderer process
-            return {
-              clientname: app_object.locals.ip + "_" + app_object.locals.roomnumber+"_"+app_object.locals.type,
-              serverAddress: app_object.locals.serverip
-            };
-        }
-
-
-
-
- 
-        
-
-
+            if(rendererData.command && rendererData.command==="log_in_student"){
+              console.log("Logging in student:", rendererData);
+              //send a message back that the student is being logged in
+              win.webContents.send('login-channel', {message:"success",command:"log_in_student",username:rendererData.data.username,password:rendererData.data.password});
+            }
+            else if(rendererData.command && rendererData.command==="get_cam_details"){
+              console.log("Getting camera details:", rendererData);
+              //send a message back with the camera details
+              win.webContents.send('camera-channel', {message:"success",command:"get_cam_details",cameraDetails:camDetails()});
+            }
+            else if(rendererData.command && rendererData.command==="door_note_launched"){
+              console.log("Door note launched:", rendererData);
+              //send a message back that the door note has been launched
+              win.webContents.send('door-note-channel', {message:"success",command:"door_note_launched"});
+            }
+            else if(rendererData.command && rendererData.command==="honour_code_launched"){
+              console.log("Honour code launched:", rendererData);
+              //send a message back that the honour code has been launched
+              win.webContents.send('honour-code-channel', {message:"success",command:"honour_code_launched"});
+            }
+            else if(rendererData.command && rendererData.command==="evaluation_loaded"){
+              console.log("Evaluation loaded:", rendererData);
+              //send a message back that the evaluation has been loaded
+              win.webContents.send('evaluation-channel', {message:"success",command:"evaluation_loaded"});
+            }
+            else if(rendererData.command && rendererData.command==="start_encounter"){
+              console.log("Start encounter:", rendererData);
+              //send a message back that the start encounter has been initiated
+              win.webContents.send('start-encounter-channel', {message:"success",command:"start_encounter"});
+            }
+            else if(rendererData.command && rendererData.command==="reset_room"){
+              console.log("Reset room:", rendererData);
+              //send a message back that the reset room has been initiated
+              win.webContents.send('reset-channel', {message:"success",command:"reset_room"});
+            }
+            else if(rendererData.command && rendererData.command==="login_form_initialized"){
+              console.log("Login form initialized:", rendererData);
+              //send a message back that the login form has been initialized
+              win.webContents.send('login-form-channel', {message:"success",command:"login_form_initialized"});
+            }
+            else if(rendererData.command && rendererData.command==="door_note_launched"){
+              console.log("Door note launched:", rendererData);
+              //send a message back that the door note has been launched
+              win.webContents.send('door-note-channel', {message:"success",command:"door_note_launched"});
+            }
+          }

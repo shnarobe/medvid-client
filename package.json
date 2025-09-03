@@ -7,7 +7,7 @@
 	"license": "MIT",
 	"scripts": {
 		"start": "electron .",
-		"watch":"nodemon --exec electron ."
+		"watch": "nodemon --exec electron ."
 	},
 	"dependencies": {
 		"@persevie/statemanjs": "^1.7.1",
@@ -22,7 +22,7 @@
 		"express": "^4.18.2",
 		"ldapjs": "^3.0.7",
 		"mongodb": "^6.3.0",
-		"mongoose": "^8.2.0",
+		"mongoose": "^8.18.0",
 		"node-rtsp-stream": "^0.0.9",
 		"node-watch": "^0.7.4",
 		"node-windows": "^1.0.0-beta.8",

@@ -59,7 +59,7 @@
                 const data = await window.API.onReceiveData((event,data)=>{
                     // Handle the data received from the main process
                     console.log("Data from main process:",event, data,"destructured:", data.clientname,
-                     data.serverAddress);
+                    data.serverAddress);
                     backendData.clientname = data.clientname;
                     backendData.serverAddress = data.serverAddress;
                     //connect to the examChildProcesses namespace
@@ -129,7 +129,8 @@
                              //send data to main to perform some action, similar to making a fetch call
                              window.API.send_to_main({
                                message: "success",
-                               status: "login initiated",
+                               command: "login_form_initialized",
+                               status: "login form initialized",
                                stepName: "login",
                                clientname: data.clientname,
                                sessionId: data.sessionId,
@@ -142,6 +143,9 @@
                              });
                             
                              //console.log("Login response from parent",response);
+                             await window.API.onLoginInitiatedResponse((event,data)=>{
+                               console.log("Login response from parent",data);
+                             });
 
             });
 
@@ -173,11 +177,25 @@
                               callback({ message: "success",status:"door note launched", stepName:"Door Note",clientname: data.clientname,
                               sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]}
                              }); 
-                             //send fetch call to Parent to update state
-                            const response= await AckFetch("/api/examsteps/studentDoorNote",{ message: "success",status:"door note launched", stepName:"Door Note",clientname: data.clientname,
-                              sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:globalParticipants,evaluations:[]}
+                             //send call to Parent to update state
+                             window.API.send_to_main({
+                               message: "success",
+                               command: "door_note_launched",
+                               status: "door note launched",
+                               stepName: "Door Note",
+                               clientname: data.clientname,
+                               sessionId: data.sessionId,
+                               timeStamp: Date.now(),
+                               stepData: {
+                                 recordingName: "",
+                                 participants: globalParticipants,
+                                 evaluations: []
+                               }
                              });
-                             console.log("Door Note response from parent",response);
+
+                            await window.API.onDoorNoteResponse((event,data)=>{
+                               console.log("Door Note response from parent",data);
+                            });
 
             });
 
@@ -210,11 +228,24 @@
                               sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]}
                              }); 
                              //send fetch call to Parent to update state
-                            const response= await AckFetch("/api/examsteps/studentHonorCode",{ message: "success",status:"honor code loaded", stepName:"Honour Code",clientname: data.clientname,
-                              sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:globalParticipants,evaluations:[]}
+                             window.API.send_to_main({
+                               message: "success",
+                                command: "honour_code_loaded",
+                               status: "honor code loaded",
+                               stepName: "Honour Code",
+                               clientname: data.clientname,
+                               sessionId: data.sessionId,
+                               timeStamp: Date.now(),
+                               stepData: {
+                                 recordingName: "",
+                                 participants: globalParticipants,
+                                 evaluations: []
+                               }
                              });
-                             console.log("Honour Code response from parent",response);
 
+                             await window.API.onHonourCodeResponse((event,data)=>{
+                               console.log("Honour Code response from parent",data);
+                             });
             });
 
              webSocket.on("Evaluation",async(data,callback)=>{
@@ -246,19 +277,31 @@
                               sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]}
                              }); 
                              //send fetch call to Parent to update state
-                            const response= await AckFetch("/api/examsteps/facultyEvaluation",{ message: "success",status:"evaluation loaded", stepName:"Evaluation",clientname: data.clientname,
-                              sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:globalParticipants,evaluations:[]}
-                             });  
-                             
-                             console.log("Evaluation response from parent",response); 
-                            
+                             window.API.send_to_main({
+                               message: "success",
+                               command: "evaluation_loaded",
+                               status: "evaluation loaded",
+                               stepName: "Evaluation",
+                               clientname: data.clientname,
+                               sessionId: data.sessionId,
+                               timeStamp: Date.now(),
+                               stepData: {
+                                 recordingName: "",
+                                 participants: globalParticipants,
+                                 evaluations: []
+                               }
+                             });
+
+                             await window.API.onEvaluationResponse((event,data)=>{
+                               console.log("Evaluation response from parent",data);
+                             });
 
             });
 
              webSocket.on("Start Encounter",async(data,callback)=>{
                 console.log("Start Encounter data received",data);
                 
-                if(data.clientname !== 'backendData.clientname') {
+                if(data.clientname !== backendData.clientname) {
                     console.log("Ignoring login message from another client:", data.clientname);
                     return; // Ignore messages from other clients
                 }
@@ -284,12 +327,25 @@
                               sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]}
                              }); 
                              //send fetch call to Parent to update state
-                            const response= await AckFetch("/api/examsteps/startEncounter",{ message: "success",status:"start encounter loaded", stepName:"Evaluation",clientname: data.clientname,
-                              sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:globalParticipants,evaluations:[]}
-                             });  
-                             
-                             console.log("start encounter response from parent",response); 
-                            
+                             window.API.send_to_main({
+                               message: "success",
+                               command: "start_encounter",
+                               status: "start encounter loaded",
+                               stepName: "Evaluation",
+                               clientname: data.clientname,
+                               sessionId: data.sessionId,
+                               timeStamp: Date.now(),
+                               stepData: {
+                                 recordingName: "",
+                                 participants: globalParticipants,
+                                 evaluations: []
+                               }
+                             });
+
+
+                            await window.API.onStartEncounterResponse((event,data)=>{
+                               console.log("Start Encounter response from parent",data);
+                            });
 
             });
 
@@ -321,11 +377,24 @@
                               sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]}
                              }); 
                              //send fetch call to Parent to update state
-                            const response= await AckFetch("/api/examsteps/reset",{ message: "success",status:"Room Reset", stepName:"Reset",
-                            clientname: data.clientname,sessionId:data.sessionId,timeStamp:Date.now(),
-                            stepData:{recordingName:"",participants:globalParticipants,evaluations:[]}
+                             window.API.send_to_main({
+                               message: "success",
+                               command: "reset_room",
+                               status: "Room Reset",
+                               stepName: "Reset",
+                               clientname: data.clientname,
+                               sessionId: data.sessionId,
+                               timeStamp: Date.now(),
+                               stepData: {
+                                 recordingName: "",
+                                 participants: globalParticipants,
+                                 evaluations: []
+                               }
                              });
-                             console.log("Reset response from parent",response);
+                            
+                             await window.API.onResetResponse((event,data)=>{
+                               console.log("Reset response from parent",data);
+                             });
                              });
             }
 
@@ -339,32 +408,30 @@
                 const formData = new FormData(event.target);
                 const objectData = Object.fromEntries(formData.entries());
                 console.log("form data",objectData);  
-
-                //send the data to the server via fetch
-                const data=await fetch("/api/examsteps/student_login",{
-                method:"POST",
-                headers:{
-                    "Content-Type":"application/json",
-                    //"Authorization":"Bearer "+token
-                },
-                body:JSON.stringify({data:objectData,
-                    clientname:document.getElementById('loginForm').querySelector('input[name="details"]').dataset.clientname,
-                    sessionId:document.getElementById('loginForm').querySelector('input[name="details"]').dataset.sessionId,
-                    step:document.getElementById('loginForm').querySelector('input[name="details"]').dataset.step})
+                //send the form data to be processed
+                //send the data to the main electron process so that authentication can occur
+                window.API.send_to_main({
+                    command:"log_in_student",
+                    data: objectData,
+                    clientname: document.getElementById('loginForm').querySelector('input[name="details"]').dataset.clientname,
+                    sessionId: document.getElementById('loginForm').querySelector('input[name="details"]').dataset.sessionId,
+                    step: document.getElementById('loginForm').querySelector('input[name="details"]').dataset.step
                 });
-
-                const result=await data.json();
-                console.log("result received from parent process",result);
-
-                if(result.message=="success"){
+                
+                let result;
+                window.API.onLoginResponse((event,data)=>{
+                    console.log("result received from parent process",data);
+                    result=data;
+                    if(result.message=="success"){
+                    console.log("Login successful:", result);
                 //if the login is successful then send a message to the client via websocket
-                const sessionId=document.getElementById('loginForm').querySelector('input[name="details"]').dataset.sessionId;
+               /*  const sessionId=document.getElementById('loginForm').querySelector('input[name="details"]').dataset.sessionId;
                 const step=document.getElementById('loginForm').querySelector('input[name="details"]').dataset.step;
                 let user="";
                 result.participants.forEach(participant => {
                     console.log("participant",participant);
                     user=user+participant.firstName+" "+participant.lastName+"( "+participant.username+" ) <br>";
-
+ 
                 });
                //hide the login form
                 document.getElementById('login').style.display = 'none';
@@ -383,7 +450,11 @@
                    document.querySelector('#loginForm span.form-text').innerHTML="Login Failed: "+result.message+". Please try again.";
                     //document.getElementById('login').style.display = 'block';
                     //hide all other divs
+                }*/
                 }
+                });
+
+                
             });
             //add event listener to the form
 

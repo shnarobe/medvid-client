@@ -1,6 +1,6 @@
 Name=Room57
 RoomNumber=57
-Type=node
+Type=studentpc
 IP=10.20.148.87
 SERVER_IP=10.20.142.211:8080
 Camera1=rtsp://root:sgubline@10.20.138.198/axis-media/media.amp
