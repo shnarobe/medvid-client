@@ -54,20 +54,20 @@
             let backendData = {clientname: "", serverAddress: ""};
             var webSocket;
             //this function retrieves data from the main process
-            (async () => {
-                //get the event and data from the main process
-                const data = await window.API.onReceiveData((event,data)=>{
-                    // Handle the data received from the main process
-                    console.log("Data from main process:",event, data,"destructured:", data.clientname,
-                    data.serverAddress);
-                    backendData.clientname = data.clientname;
-                    backendData.serverAddress = data.serverAddress;
-                    //connect to the examChildProcesses namespace
-                     webSocket = io("ws://" + backendData.serverAddress + "/examChildProcesses");
-                     setupWebsocket();
-
-                });
-                
+           //IMPORTANT NOTE: DISCONTINUE THE CHILD PROCESS WEBSOCKET CONNECTION AND JUST KEEP THE PARENT ALONE 
+           (async () => {
+                //listen for data
+                 window.API.onInitialization((data)=>{
+                   console.log("Data from main process:", data,"destructured:", data.clientname,data.serverAddress);
+                      backendData.clientname = data.clientname;
+                      backendData.serverAddress = data.serverAddress;
+                      
+                      //connect to the examChildProcesses namespace
+                      webSocket = io("ws://" + backendData.serverAddress + "/examChildProcesses");
+                      setupWebsocket();
+                 
+                 });
+  
             })();
             console.log("backendData:", backendData);
             var globalParticipants = [];
@@ -178,7 +178,7 @@
                               sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]}
                              }); 
                              //send call to Parent to update state
-                             window.API.send_to_main({
+                             const response=await window.API.send_to_main({
                                message: "success",
                                command: "door_note_launched",
                                status: "door note launched",
@@ -193,9 +193,7 @@
                                }
                              });
 
-                            await window.API.onDoorNoteResponse((event,data)=>{
-                               console.log("Door Note response from parent",data);
-                            });
+                            console.log("response received from main",response);
 
             });
 

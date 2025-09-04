@@ -101,7 +101,7 @@ const logger = winston.createLogger({
   */
 //1. Wait for the app to be ready before starting 
 var tray=null;
-var win=null;//the browser window
+
 app.whenReady().then(()=>{
   //create the tray icon
   tray=new Tray(path.join(__dirname,'logo.png'));
@@ -112,16 +112,31 @@ app.whenReady().then(()=>{
   tray.setToolTip('SGUSimHub.@KrishnaRobertson(krobert4@sgu.edu)');
   tray.setContextMenu(contextMenu);
 
-  // FLOW 1: Renderer to Main process - listen for ipc calls from renderer process
+  // FLOW 1A: Renderer to Main process - listen for ipc calls from renderer process
   //channel: get_data_from_renderer_process, handler: handleDataFromRendererProcess
-  ipcMain.handle('get_data_from_renderer_process', handleDataFromRendererProcess);
+  /**THIS FUNCTION HANDLES ALL INCOMING COMMUNICATION
+  ipcMain.handle('communication-channel', handleDataFromRendererProcess);
+  It was decided not to use handle as there is an error handling issue with it...use ipcMain.on instead
+  Note that if ipcMain.handle is use, then we must use invoke in the preload to call it
+*/
 
-  //send messages to the renderer process. MAIN TO RENDERER
-  ipcMain.on('message-from-renderer', (event, message) => {
+  //FLOW 1B.   RENDERER TO MAIN
+  //**THIS FUNCTION LISTENS FOR A MESSAGE/EVENT FROM THE RENDERER ON THE SPECIFIED CHANNEL AND CAN REPLY WITH A RESPONSE
+  // NOTE THAT THE API STATES THAT:"when the messages arrives the listener would be called with listener(event,args)" */
+  ipcMain.on('set-title-channel', (event, message) => {
     console.log('Message from renderer:', message);
+    const webContents=event.sender;
+    const wind=BrowserWindow.fromWebContents(webContents);
+    win.setTitle(message);
     // You can send a response back to the renderer if needed
-    event.reply('message-from-main', 'Hello from main process!');
+    //the preferred way to send a message back to gaurantee the correct process is being accessed
+    event.reply('set-title-channel', 'Hello from main process!');//channel,...args[]
+    //code for preload.js
+    //setTitle:(title)=>ipcRenderer.send('set-title-channel',title);
   });
+
+  //Main channel. When a new message arrives listener would be called with listener(event,args)
+  ipcMain.on("communication-channel",handleDataFromRendererProcess);
 
     //1. make a database connection
     mongoose
@@ -1393,7 +1408,7 @@ function uploadAlt(fn,sessionID){
 
         const createWindow = () => {
           //launch browser in full screen, kiosk mode
-          win = new BrowserWindow({
+          const win = new BrowserWindow({
             width: 800,
             height: 600,
             //fullscreen: true,
@@ -1411,7 +1426,7 @@ function uploadAlt(fn,sessionID){
           win.webContents.on('did-finish-load', (event) => {
             console.log("WebContents finished loading:", event);
           //channel, args
-            win.webContents.send('data-channel', {
+            win.webContents.send('initialization-channel', {
               clientname: app_object.locals.ip + "_" + app_object.locals.roomnumber+"_"+app_object.locals.type,
               serverAddress: app_object.locals.serverip
             });
@@ -1426,7 +1441,9 @@ function uploadAlt(fn,sessionID){
             if(rendererData.command && rendererData.command==="log_in_student"){
               console.log("Logging in student:", rendererData);
               //send a message back that the student is being logged in
-              win.webContents.send('login-channel', {message:"success",command:"log_in_student",username:rendererData.data.username,password:rendererData.data.password});
+              //win.webContents.send('login-channel', {message:"success",command:"log_in_student",username:rendererData.data.username,password:rendererData.data.password});
+              //use event.reply instead
+              event.reply("communication-channel",{message:"success",command:"log_in_student",username:rendererData.data.username,password:rendererData.data.password});
             }
             else if(rendererData.command && rendererData.command==="get_cam_details"){
               console.log("Getting camera details:", rendererData);
