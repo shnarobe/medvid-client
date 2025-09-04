@@ -11,13 +11,19 @@ contextBridge.exposeInMainWorld('API', {
      * It listens to the channel, when a new message arrives listener is called with event,args
      * For security reasons we don't expose the event object to the renderer, hence only the data is in the call back
      */
-    data_channel: (callback) => ipcRenderer.on('communication-channel', (event, data) => callback(data)),
-    onInitialization: (callback) => ipcRenderer.on('initialization-channel', (event, data) => callback(data)),
-    /* onLoginInitiatedResponse: (callback) => ipcRenderer.on('login-initiated-channel', (event, data) => callback(event,data)),
+   
+    onLoginInitiated: (callback) => ipcRenderer.on('login-initiated-channel', (event, data) => callback(data)),
+    onLoginInitiatedResponse:(responseData)=>ipcRenderer.send("login-initiated-response-channel",responseData),
+
+
+
+
+    
+     /* data_channel: (callback) => ipcRenderer.on('communication-channel', (event, data) => callback(data)),
     onDoorNoteResponse: (callback) => ipcRenderer.on('door-note-channel', (event, data) => callback(event,data)),
     onHonourCodeResponse: (callback) => ipcRenderer.on('honour-code-channel', (event, data) => callback(event,data)),
     onEvaluationResponse: (callback) => ipcRenderer.on('evaluation-channel', (event, data) => callback(event,data)),
     onStartEncounterResponse: (callback) => ipcRenderer.on('start-encounter-channel', (event, data) => callback(event,data)),
     onResetResponse: (callback) => ipcRenderer.on('reset-channel', (event, data) => callback(event,data)),
-    onLoginResponse: (callback) => ipcRenderer.on('login-response-channel', (event, data) => callback(event,data)) */
+    onLoginResponse: (callback) => ipcRenderer.on('login-response-channel', (event, data) => callback(event,data))  */
 });

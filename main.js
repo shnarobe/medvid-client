@@ -101,7 +101,7 @@ const logger = winston.createLogger({
   */
 //1. Wait for the app to be ready before starting 
 var tray=null;
-
+var win;
 app.whenReady().then(()=>{
   //create the tray icon
   tray=new Tray(path.join(__dirname,'logo.png'));
@@ -575,66 +575,28 @@ app.whenReady().then(()=>{
                 obj.clientname ===
                 app_object.locals.ip + "_" + app_object.locals.roomnumber + "_" + app_object.locals.type
               ) {
-                      console.log("MATCHED");
+                  console.log("MATCHED", "login data received",data);
+                  //send command to renderer to load login form
+                  sendMessageToRenderer("login-initiated-channel",data);
+
+                   ipcMain.on("login-initiated-response-channel",(event,data)=>{
+                    console.log("event ",event,"data",data);
+                    //send ACK to server
+                    callback({ message: "success",status:"login initiated", stepName:"login",clientname: data.clientname,
+                        sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]} }); 
+                  });
                     
-
-
-                    //call route to render login page
-                    console.log("data received", obj);
-                    let content='<h1>Login page coming soon!</h1>';
-                    for(const key of Object.keys(obj)){
-                      console.log("key",key,"obj[key]",obj[key]);
-                      if(key.includes("stepData")){
-                        for(const key1 of Object.keys(obj[key])){
-                          console.log("stepData: key",key1,"value",obj[key][key1]);
-                          if(key1.includes("content")){
-                            console.log("content key",key1,"content value",obj[key][key1]);
-                            content=obj[key][key1];//get the content from the object
-                            
-                          }
-                        }
-                        
-                      
-                      }
-                    }
-                    //send message to child process via its websocke.NB it has the examChildProcesses namespace
-                  /*  childProcessSocket.broadcast.emit("login", {message:"success",step:"login",
-                      clientname: obj.clientname,content:content,
-                      type:"exam",divId:"login",display:"on",sessionId:obj.sessionId,description:"login call for child process"}); */
-                    callback({ message: "success",status:"login initiated", stepName:"login",clientname: obj.clientname,sessionId:obj.sessionId,timeStamp:Date.now(),
-                  stepData:{recordingName:"",participants:[],evaluations:[]}
-                }); 
-                    //Browsers ignore <script> tags added via innerHTML for security and performance reasons., 
-                    // so add the script before hand in main.ejs
-                    /**EVERY CALLBACK SHOULD RETRUN THE FOLLOWING FIELDS:{CLIENT NAME
-                * SESSIONID,ACK TIMESTAMP,PAYLOAD:[RECORDINGNAME,STUDENTID:[],EVALID:[]]}
-                * We can at least be sure that attempting to send data only takes place once a connection is
-                *  established by defining an onopen event handler to do the work:
-                * 
-                *  */
-                //check that ws connection is open before sending message
-                /* if(connections.get(app_object.locals.ip).readyState===ws.OPEN){
-                  //send the content to the client via websocket. This client should have the same ip as the server
-                    connections.get(app_object.locals.ip).send(JSON.stringify({message:"success",step:"login",clientname: obj.clientname,content:content,
-                      type:"exam",divId:"login",display:"on",sessionId:obj.sessionId}));
-                    console.log(app_object.locals.ip,"=",connections.keys().next().value); 
-                    //send socketio msg back to server of successful login and then update the state locally   
-                  callback({ message: "success",status:"login initiated", stepName:"login",clientname: obj.clientname,sessionId:obj.sessionId,timeStamp:Date.now(),
-                  stepData:{recordingName:"",participants:[],evaluations:[]}
-                }); 
-                systemState.updateState(`${app_object.locals.ip}_${app_object.locals.roomnumber}_${app_object.locals.type}`,
-                  {examStep:"login",sessionId:obj.sessionId,status:"student_login_pending"});
-                }
-                else{
-                  console.log("No connection found for ip",app_object.locals.ip, "map:",connections.keys().next().value);
-                  callback({ message: "failure",stepName:"login",status:"student_login_failed", clientname: obj.clientname,sessionId:obj.sessionId,timeStamp:Date.now(),
-                  stepData:{recordingName:"",participants:[],evaluations:[]}
-                });
-                systemState.updateState(`${app_object.locals.ip}_${app_object.locals.roomnumber}_${app_object.locals.type}`, 
-                  {examStep:"login",sessionId:obj.sessionId,status:"student_login_failed"});
-                } */
+                return;
+                   
                           
                   
+                }
+                else{
+                  //if not a match then return a failure
+                   callback({ message: "failure",status:"login initiated", stepName:"login",clientname: data.clientname,
+                              sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]}
+                             }); 
+                    return; // Ignore messages from other clients
                 }
               
             });
@@ -1408,7 +1370,7 @@ function uploadAlt(fn,sessionID){
 
         const createWindow = () => {
           //launch browser in full screen, kiosk mode
-          const win = new BrowserWindow({
+          win = new BrowserWindow({
             width: 800,
             height: 600,
             //fullscreen: true,
@@ -1423,19 +1385,19 @@ function uploadAlt(fn,sessionID){
           win.webContents.openDevTools();//open dev tools
           //set the webContents object so that we can pass data from main to the renderer with the 
           //client and server details
-          win.webContents.on('did-finish-load', (event) => {
+          /* win.webContents.on('did-finish-load', (event) => {
             console.log("WebContents finished loading:", event);
           //channel, args
             win.webContents.send('initialization-channel', {
               clientname: app_object.locals.ip + "_" + app_object.locals.roomnumber+"_"+app_object.locals.type,
               serverAddress: app_object.locals.serverip
             });
-          });
+          }); */
         }
         /**This will be the main function to handle all communication flows from the renderer process.
          * It will consist of a switch statement or if else logic to handle different commands.
          */
-        async function handleDataFromRendererProcess(event,rendererData){
+       /*  async function handleDataFromRendererProcess(event,rendererData){
             console.log("Event from renderer process",event," Data received from renderer process:", rendererData);
             // Return the data you want to send to the renderer process
             if(rendererData.command && rendererData.command==="log_in_student"){
@@ -1485,4 +1447,16 @@ function uploadAlt(fn,sessionID){
               //send a message back that the door note has been launched
               win.webContents.send('door-note-channel', {message:"success",command:"door_note_launched"});
             }
+          } */
+
+          // Now, anywhere in your main process, you can send messages like this:
+          function sendMessageToRenderer(channel, data) {
+            if (win && win.webContents) {
+              win.webContents.send(channel, data);
+            }
           }
+
+          //event listeners for main process
+          ipcMain.on("login-initiated-response-channel",(event,data)=>{
+            console.log("event ",event,"data",data);
+          });
