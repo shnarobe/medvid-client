@@ -1,5 +1,4 @@
 const {contextBridge,ipcRenderer} = require('electron');
-const { on } = require('ws');
 
 //expose the API global to the renderer and creates a safe, bi-directional, synchronous bridge across isolated contexts
 contextBridge.exposeInMainWorld('API', {

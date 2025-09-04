@@ -123,7 +123,7 @@ app.whenReady().then(()=>{
   //FLOW 1B.   RENDERER TO MAIN
   //**THIS FUNCTION LISTENS FOR A MESSAGE/EVENT FROM THE RENDERER ON THE SPECIFIED CHANNEL AND CAN REPLY WITH A RESPONSE
   // NOTE THAT THE API STATES THAT:"when the messages arrives the listener would be called with listener(event,args)" */
-  ipcMain.on('set-title-channel', (event, message) => {
+ /*  ipcMain.on('set-title-channel', (event, message) => {
     console.log('Message from renderer:', message);
     const webContents=event.sender;
     const wind=BrowserWindow.fromWebContents(webContents);
@@ -133,10 +133,10 @@ app.whenReady().then(()=>{
     event.reply('set-title-channel', 'Hello from main process!');//channel,...args[]
     //code for preload.js
     //setTitle:(title)=>ipcRenderer.send('set-title-channel',title);
-  });
+  }); */
 
   //Main channel. When a new message arrives listener would be called with listener(event,args)
-  ipcMain.on("communication-channel",handleDataFromRendererProcess);
+  //ipcMain.on("communication-channel",handleDataFromRendererProcess);
 
     //1. make a database connection
     mongoose
@@ -575,15 +575,16 @@ app.whenReady().then(()=>{
                 obj.clientname ===
                 app_object.locals.ip + "_" + app_object.locals.roomnumber + "_" + app_object.locals.type
               ) {
-                  console.log("MATCHED", "login data received",data);
+                  console.log("MATCHED", "login data received",obj);
                   //send command to renderer to load login form
-                  sendMessageToRenderer("login-initiated-channel",data);
-
-                   ipcMain.on("login-initiated-response-channel",(event,data)=>{
-                    console.log("event ",event,"data",data);
+                  sendMessageToRenderer("login-initiated-channel",obj);
+                  
+                  //listen for response from renderer and then send ACK to server
+                   ipcMain.on("login-initiated-response-channel",(event,obj)=>{
+                    console.log("Received login response: ","event ",event,"data",obj);
                     //send ACK to server
-                    callback({ message: "success",status:"login initiated", stepName:"login",clientname: data.clientname,
-                        sessionId:data.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]} }); 
+                    callback({ message: "success",status:"login initiated", stepName:"login",clientname: obj.clientname,
+                        sessionId:obj.sessionId,timeStamp:Date.now(),stepData:{recordingName:"",participants:[],evaluations:[]} }); 
                   });
                     
                 return;
@@ -1456,7 +1457,4 @@ function uploadAlt(fn,sessionID){
             }
           }
 
-          //event listeners for main process
-          ipcMain.on("login-initiated-response-channel",(event,data)=>{
-            console.log("event ",event,"data",data);
-          });
+         
